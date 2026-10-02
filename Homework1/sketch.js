@@ -135,7 +135,6 @@ function draw() {
   //star
   beginShape();
   fill(star.fill);
-  stroke(star.strokeFill);
   for (let i = 0; i < star.vertices.length; i++) {
     let x = star.vertices[i].x;
     let y = star.vertices[i].y;
