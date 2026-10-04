@@ -31,6 +31,8 @@ function setup() {
   }
 
   nextSpawn = frameCount + random(10, 80);
+  // Enter 키 이벤트 등록
+  window.addEventListener("keydown", handleKeydown);
   
   // --------------------
   // 모기끼리 충돌
@@ -339,9 +341,8 @@ function mousePressed() {
 // --------------------
 
 
-window.addEventListener("keydown", function(event) {
+function handleKeydown(event) {
 
-  console.log("눌린 키:", event.key);
 
   if (event.key === "Enter") {
 
@@ -352,5 +353,5 @@ window.addEventListener("keydown", function(event) {
 
   }
 
-});
+}
 
