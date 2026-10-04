@@ -107,9 +107,26 @@ function draw() {
 
   for (let mosquito of mosquitos) {
 
+  // 감전된 모기
+  if (mosquito.isDead) {
+    // 아래로 떨어지게
+    Body.applyForce(
+      mosquito,
+      mosquito.position,
+      {
+        x: 0,
+        y: 0.0001
+      }
+    );
+
+    continue;
+  }
+
+
+    //살아있는 모기
   // 랜덤하게 방향을 바꾸는 힘
-  let randomForceX = random(-0.0005, 0.0005);
-  let randomForceY = random(-0.0005, 0.0005);
+  let randomForceX = random(-0.0003, 0.0003);
+  let randomForceY = random(-0.0003, 0.0003);
 
   // 아래로 떨어지면 위쪽으로 밀어줌
   let liftForce = 0;
@@ -152,30 +169,39 @@ if (electric) {
     let y = mosquito.position.y;
 
 
-    // 중앙 전기 주변에 있는 모기 죽이기
     if (
+      !mosquito.isDead &&
       abs(y - height / 2) < 40
     ) {
 
-      Composite.remove(
-        engine.world,
-        mosquito
+      mosquito.isDead = true;
+
+      // 날아가던 속도 멈추기
+      Body.setVelocity(
+        mosquito,
+        {
+          x: 0,
+          y: 0
+        }
       );
 
-      mosquitos.splice(i, 1);
+    // 빙글빙글 회전
+    Body.setAngularVelocity(
+      mosquito,
+      random(-0.15, 0.15)
+    );
 
-    }
+    // 공중에 붙잡혀 있지 않게
+    mosquito.frictionAir = 0;
 
+  
   }
-
+}
 
   // 시간이 끝나면 전기 제거
   if (electricTimer <= 0) {
-
     electric = false;
-
   }
-
 }
 
 
@@ -185,41 +211,48 @@ if (electric) {
 
   for (let mosquito of mosquitos) {
 
-    let x = mosquito.position.x;
-    let y = mosquito.position.y;
+  let x = mosquito.position.x;
+  let y = mosquito.position.y;
 
+  push();
 
-    // 몸
+  translate(x, y);
 
-    fill(50);
+  // Matter.js의 회전값을 그림에도 적용
+  rotate(mosquito.angle);
 
-    ellipse(
-      x,
-      y,
-      20,
-      20
+  // 몸
+  fill(50);
+  ellipse(0, 0, 20, 20);
+
+  // 날개
+  fill(180);
+  ellipse(-10, -5, 15, 8);
+  ellipse(10, -5, 15, 8);
+
+  // 침
+  stroke(20);
+  strokeWeight(2);
+  line(0, 10, 0, 17);
+  noStroke();
+
+  pop();
+}
+
+  for (let i = mosquitos.length - 1; i >= 0; i--) {
+
+  let mosquito = mosquitos[i];
+
+  if (mosquito.position.y > height + 50) {
+
+    Composite.remove(
+      engine.world,
+      mosquito
     );
 
-
-    // 날개
-
-    fill(180);
-
-    ellipse(
-      x - 10,
-      y - 5,
-      15,
-      8
-    );
-
-    ellipse(
-      x + 10,
-      y - 5,
-      15,
-      8
-    );
-
+    mosquitos.splice(i, 1);
   }
+}
 
 }
 
@@ -247,7 +280,9 @@ function createMosquito() {
       frictionAir: 0.01
 
     }
-  );
+  );  
+
+  mosquito.isDead = false;
 
 
   mosquitos.push(mosquito);
