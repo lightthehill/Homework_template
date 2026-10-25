@@ -1,36 +1,796 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <!-- 모바일 필수: 폰에서 PC용 화면처럼 축소되는 것 방지 -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
-    <title>Homework3</title>
-    <script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
-    <style>
-      html, body {
-        height: 100%;
-        margin: 0;
-        overflow: hidden;
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>한 단어 일기 계단 RPG - 모바일 최적화</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 콘페티 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #ffffff;
+      color: #000000;
+      user-select: none;
+    }
+
+    .border-right-black {
+      border-right: 0.75px solid #000000;
+    }
+
+    .border-top-black {
+      border-top: 0.75px solid #000000;
+    }
+
+    /* 단어 상자 스타일 */
+    .word-box {
+      border: none;
+      height: 28px;
+      padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 400;
+      white-space: nowrap;
+      position: relative;
+      margin-right: 2px;
+      border-radius: 2px;
+      transition: all 0.2s ease;
+    }
+
+    .word-box.deletable {
+      cursor: pointer;
+    }
+    .word-box.deletable:hover, .word-box.deletable:active {
+      opacity: 0.7;
+      text-decoration: line-through;
+    }
+
+    .day-num {
+      font-size: 9px;
+      font-weight: 400;
+      margin-right: 2px;
+      vertical-align: super;
+      line-height: 1;
+      opacity: 0.7;
+    }
+
+    .month-btn {
+      border: 0.75px solid #000000;
+      padding: 4px 6px;
+      font-size: 11px;
+      font-weight: 400;
+      background-color: #ffffff;
+      color: #000000;
+      cursor: pointer;
+      text-align: center;
+      border-radius: 2px;
+    }
+
+    .month-btn.active {
+      background-color: #000000;
+      color: #ffffff;
+    }
+
+    /* 캐릭터 통통 튀는 애니메이션 */
+    @keyframes charBounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    .bounce-anim {
+      animation: charBounce 0.3s ease infinite alternate;
+    }
+
+    /* 말풍선 스타일 */
+    .speech-bubble {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #000;
+      color: #fff;
+      font-size: 10px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 40;
+      pointer-events: none;
+      animation: fadeInOut 2s ease forwards;
+    }
+    @keyframes fadeInOut {
+      0% { opacity: 0; transform: translate(-50%, 5px); }
+      20% { opacity: 1; transform: translate(-50%, 0); }
+      80% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -5px); }
+    }
+
+    /* 오른쪽 캔버스 스크롤바 모던 스타일 */
+    #canvasArea::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    #canvasArea::-webkit-scrollbar-thumb {
+      background: #cccccc;
+      border-radius: 3px;
+    }
+    #canvasArea::-webkit-scrollbar-track {
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body class="flex flex-col w-screen h-screen overflow-hidden bg-white" onclick="focusInput()">
+
+  <!-- 우측 상단: 검수 및 테스트 도구 (모바일에서는 간소화) -->
+  <div class="absolute top-2 right-2 z-20 flex items-center gap-1 bg-white/90 p-1 rounded" onclick="event.stopPropagation()">
+    <span id="currentDateDisplay" class="text-[10px] font-normal bg-black text-white px-1.5 py-0.5">로딩 중</span>
+    <button onclick="autoFillDay()" class="text-[10px] border border-black px-1.5 py-0.5 bg-gray-100 active:bg-black active:text-white">
+      ⚡채우기
+    </button>
+    <button onclick="addNewMonth()" class="text-[10px] border border-black px-1.5 py-0.5 bg-white active:bg-black active:text-white">
+      +월
+    </button>
+    <button onclick="resetData()" class="text-[10px] border border-black px-1.5 py-0.5 bg-white text-red-600 active:bg-red-600 active:text-white">
+      초기화
+    </button>
+  </div>
+
+  <!-- 상단 영역 (왼쪽 월 목록 + 오른쪽 계단 무대) -->
+  <div class="flex flex-1 overflow-hidden">
+    
+    <!-- 왼쪽 영역: 년도-월 버튼 목록 -->
+    <div class="w-20 md:w-24 border-right-black flex flex-col p-2 overflow-y-auto gap-1.5 bg-white shrink-0">
+      <div id="monthListContainer" class="flex flex-col gap-1.5"></div>
+    </div>
+
+    <!-- 오른쪽 영역: 메인 계단 스크롤 무대 -->
+    <div id="canvasArea" class="flex-1 h-full relative overflow-auto bg-white p-4 sm:p-8" onclick="focusInput()">
+      <div id="stairsWrapper" class="relative min-w-full min-h-full">
+        <div id="stairsContainer" class="absolute left-4 sm:left-8 transition-all duration-300"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 하단 영역 (모바일 화면 잘림 방지 최적화) -->
+  <div class="h-16 sm:h-20 border-top-black flex shrink-0 bg-white" onclick="event.stopPropagation()">
+    
+    <!-- 왼쪽 하단 타이틀 박스 -->
+    <div class="w-20 md:w-24 border-right-black flex items-center justify-start pl-2 p-1 text-left text-[11px] sm:text-xs font-normal leading-tight shrink-0">
+      one word<br>a day<br>game
+    </div>
+
+    <!-- 오른쪽 하단 영역: 입력란과 버튼이 화면 안에 완전히 들어오도록 컴팩트하게 구성 -->
+    <div class="flex-1 flex items-center justify-between px-2 sm:px-4 gap-2 bg-white overflow-hidden">
+      <div id="todayStatusText" class="text-[11px] sm:text-xs font-normal text-gray-500 whitespace-nowrap shrink-0">확인 중</div>
+      
+      <div class="flex items-center gap-1.5 shrink-0">
+        <div class="border border-black flex items-center px-2 py-1 bg-white w-28 sm:w-48 md:w-64">
+          <input 
+            type="text" 
+            id="wordInput" 
+            placeholder="단어 입력..." 
+            class="w-full text-xs outline-none font-normal bg-transparent"
+            onkeydown="handleKeyDown(event)"
+            oninput="handleInput(event)"
+            autocomplete="off"
+          />
+        </div>
+        <!-- 터치 전용 제어 버튼 -->
+        <button onclick="touchAddWord()" class="border border-black px-2 py-1 text-xs font-normal bg-gray-100 active:bg-black active:text-white whitespace-nowrap">
+          +추가
+        </button>
+        <button onclick="touchCompleteDay()" class="border border-black px-2 py-1 text-xs font-normal bg-black text-white active:bg-gray-800 whitespace-nowrap">
+          ✓완료
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'ONE_WORD_STAIR_TOUCH_V2';
+
+    function getRandomPastelBg() {
+      const hue = Math.floor(Math.random() * 360);
+      return `hsl(${hue}, 80%, 90%)`;
+    }
+
+    const nowDate = new Date();
+    const realYear = nowDate.getFullYear();
+    const realMonth = nowDate.getMonth() + 1;
+    const realDay = nowDate.getDate();
+    const realYM = `${realYear}-${String(realMonth).padStart(2, '0')}`;
+
+    let state = {
+      activeYearMonth: realYM,
+      currentYearMonth: realYM,
+      months: [realYM],
+      monthData: {
+        [realYM]: {
+          year: realYear,
+          month: realMonth,
+          currentDay: realDay,
+          completedDays: [] 
+        }
+      },
+      currentDraftWords: []
+    };
+
+    const cheerMessages = [
+      "오늘도 멋진 하루예요! ✨",
+      "한 걸음씩 성장 중! 🐾",
+      "좋은 단어네요! 💛",
+      "힘내세요, 응원해요! 🌱",
+      "꾸준함이 최고예요! 🚀"
+    ];
+
+    function handleCharacterTouch(event) {
+      event.stopPropagation();
+      const target = event.currentTarget;
+      
+      const svgContainer = target.querySelector('.char-svg-box');
+      if (svgContainer) {
+        svgContainer.classList.add('bounce-anim');
+        setTimeout(() => {
+          svgContainer.classList.remove('bounce-anim');
+        }, 600);
       }
-      /* 터치 필수: 브라우저가 스크롤/확대 대신 코드에 터치를 넘기도록 함.
-         iOS Safari는 canvas가 아니라 body에 걸어야 인정함 */
-      body {
-        touch-action: none;
-        overscroll-behavior: none;
-        -webkit-user-select: none;
-        user-select: none;
-        -webkit-touch-callout: none;
+
+      const existingBubble = target.querySelector('.speech-bubble');
+      if (existingBubble) existingBubble.remove();
+
+      const bubble = document.createElement('div');
+      bubble.className = 'speech-bubble';
+      bubble.innerText = cheerMessages[Math.floor(Math.random() * cheerMessages.length)];
+      target.appendChild(bubble);
+
+      setTimeout(() => {
+        bubble.remove();
+      }, 2000);
+    }
+
+    function getCharacterSVG(level = 1) {
+      let svgContent = '';
+      if (level <= 1) {
+        svgContent = `
+          <svg width="22" height="24" viewBox="0 0 24 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="12" cy="14" rx="6" ry="8" stroke="black" stroke-width="1.5" fill="white"/>
+            <circle cx="10" cy="13" r="0.9" fill="black"/>
+            <circle cx="14" cy="13" r="0.9" fill="black"/>
+          </svg>
+        `;
+      } else if (level === 2) {
+        svgContent = `
+          <svg width="22" height="34" viewBox="0 0 24 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="10" r="5" stroke="black" stroke-width="1.5" fill="white"/>
+            <circle cx="10.2" cy="9.5" r="0.8" fill="black"/>
+            <circle cx="13.8" cy="9.5" r="0.8" fill="black"/>
+            <circle cx="12" cy="24" r="8" stroke="black" stroke-width="1.5" fill="white"/>
+          </svg>
+        `;
+      } else if (level === 3) {
+        svgContent = `
+          <svg width="24" height="38" viewBox="0 0 28 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="14" cy="9" r="5" stroke="black" stroke-width="1.5" fill="white"/>
+            <circle cx="12.2" cy="8.5" r="0.8" fill="black"/>
+            <circle cx="15.8" cy="8.5" r="0.8" fill="black"/>
+            <ellipse cx="14" cy="22" rx="5.5" ry="7.5" stroke="black" stroke-width="1.5" fill="white"/>
+            <line x1="8.5" y1="18" x2="4" y2="25" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="19.5" y1="18" x2="24" y2="25" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="11.5" y1="29.5" x2="11.5" y2="39" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="16.5" y1="29.5" x2="16.5" y2="39" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        `;
+      } else {
+        svgContent = `
+          <svg width="26" height="42" viewBox="0 0 32 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="10" r="5.5" stroke="black" stroke-width="1.5" fill="white"/>
+            <circle cx="14" cy="9" r="0.8" fill="black"/>
+            <circle cx="18" cy="9" r="0.8" fill="black"/>
+            <path d="M 13.8 12 Q 16 14.5 18.2 12" stroke="black" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+            <ellipse cx="16" cy="24" rx="6" ry="8" stroke="black" stroke-width="1.5" fill="white"/>
+            <line x1="10" y1="20" x2="5" y2="27" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="4" cy="28.5" r="1.6" stroke="black" stroke-width="1.3" fill="white"/>
+            <line x1="22" y1="20" x2="27" y2="27" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="28" cy="28.5" r="1.6" stroke="black" stroke-width="1.3" fill="white"/>
+            <line x1="13" y1="32" x2="13" y2="42" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="19" y1="32" x2="19" y2="42" stroke="black" stroke-width="1.5" stroke-linecap="round"/>
+            <ellipse cx="11.5" cy="43.5" rx="3" ry="1.5" stroke="black" stroke-width="1.3" fill="white"/>
+            <ellipse cx="20.5" cy="43.5" rx="3" ry="1.5" stroke="black" stroke-width="1.3" fill="white"/>
+          </svg>
+        `;
       }
-      canvas {
-        touch-action: none;
+
+      return `
+        <div class="absolute -top-9 left-2 transition-all duration-300 z-30 cursor-pointer flex flex-col items-center p-1" onclick="handleCharacterTouch(event)" ontouchstart="handleCharacterTouch(event)">
+          <div class="char-svg-box flex flex-col items-center">${svgContent}</div>
+        </div>
+      `;
+    }
+
+    function triggerConfetti() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 50,
+          spread: 60,
+          origin: { y: 0.6 },
+          colors: ['#ffb3ba', '#bae1ff', '#baffc9', '#ffffba', '#ffdfba']
+        });
       }
-    </style>
-  </head>
-  <body>
-    <script>
-      // 터치 필수: Safari는 CSS만으로는 드래그 스크롤을 완전히 못 막아서 스크립트로 한 번 더 차단
-      document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
-    </script>
-    <script src="sketch.js"></script>
-  </body>
+    }
+
+    function init() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { 
+          state = JSON.parse(saved); 
+          if (state.monthData[realYM]) {
+            if (state.monthData[realYM].currentDay < realDay) {
+              state.monthData[realYM].currentDay = realDay;
+            }
+          } else {
+            if (!state.months.includes(realYM)) {
+              state.months.push(realYM);
+            }
+            state.monthData[realYM] = {
+              year: realYear,
+              month: realMonth,
+              currentDay: realDay,
+              completedDays: []
+            };
+          }
+          state.currentYearMonth = realYM;
+          state.activeYearMonth = realYM;
+        } catch (e) { 
+          console.error(e); 
+        }
+      } else {
+        state.activeYearMonth = realYM;
+        state.currentYearMonth = realYM;
+        state.months = [realYM];
+        state.monthData = {};
+        state.monthData[realYM] = {
+          year: realYear,
+          month: realMonth,
+          currentDay: realDay,
+          completedDays: []
+        };
+      }
+
+      renderMonthList();
+      renderStairs();
+      checkInputStatus();
+      focusInput();
+      initSwipeGesture();
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function renderMonthList() {
+      const container = document.getElementById('monthListContainer');
+      container.innerHTML = '';
+
+      state.months.forEach(ym => {
+        const btn = document.createElement('div');
+        btn.className = `month-btn ${ym === state.activeYearMonth ? 'active' : ''}`;
+        btn.innerText = ym;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          selectMonth(ym);
+        };
+        container.appendChild(btn);
+      });
+
+      const activeData = state.monthData[state.activeYearMonth];
+      document.getElementById('currentDateDisplay').innerText = `${state.activeYearMonth} (${activeData ? activeData.currentDay + '일' : ''})`;
+    }
+
+    function selectMonth(ym) {
+      state.activeYearMonth = ym;
+      renderMonthList();
+      renderStairs();
+      checkInputStatus();
+      focusInput();
+    }
+
+    function focusInput() {
+      const input = document.getElementById('wordInput');
+      if (input && state.activeYearMonth === state.currentYearMonth) {
+        input.focus();
+      }
+    }
+
+    function checkInputStatus() {
+      const input = document.getElementById('wordInput');
+      const statusText = document.getElementById('todayStatusText');
+      const isCurrentMonth = (state.activeYearMonth === state.currentYearMonth);
+      const curMonthData = state.monthData[state.currentYearMonth];
+
+      if (!isCurrentMonth) {
+        input.disabled = true;
+        input.placeholder = "조회 모드";
+        statusText.innerText = `기록 감상 중`;
+        statusText.className = "text-[11px] sm:text-xs font-normal text-gray-400 whitespace-nowrap shrink-0";
+      } else {
+        input.disabled = false;
+        if (state.currentDraftWords.length >= 10) {
+          input.placeholder = "10개 완료!";
+        } else {
+          input.placeholder = "단어 입력...";
+        }
+        statusText.innerText = `${curMonthData.month}/${curMonthData.currentDay} (${state.currentDraftWords.length}/10)`;
+        statusText.className = "text-[11px] sm:text-xs font-normal text-gray-500 whitespace-nowrap shrink-0";
+      }
+    }
+
+    function advanceToNextDay() {
+      const curData = state.monthData[state.currentYearMonth];
+      curData.currentDay++;
+      if (curData.currentDay > 31) {
+        addNewMonth();
+      } else {
+        renderMonthList();
+      }
+    }
+
+    function addNewMonth() {
+      const curData = state.monthData[state.currentYearMonth];
+      let newYear = curData.year;
+      let newMonth = curData.month + 1;
+      
+      if (newMonth > 12) {
+        newMonth = 1;
+        newYear++;
+      }
+
+      const newYM = `${newYear}-${String(newMonth).padStart(2, '0')}`;
+
+      if (!state.months.includes(newYM)) {
+        state.months.push(newYM);
+        state.monthData[newYM] = {
+          year: newYear,
+          month: newMonth,
+          currentDay: 1,
+          completedDays: []
+        };
+      }
+
+      state.currentYearMonth = newYM;
+      state.activeYearMonth = newYM;
+      state.currentDraftWords = [];
+
+      saveState();
+      renderMonthList();
+      renderStairs();
+      checkInputStatus();
+      focusInput();
+    }
+
+    function touchAddWord() {
+      if (state.activeYearMonth !== state.currentYearMonth) return;
+      const input = document.getElementById('wordInput');
+      const val = input.value.trim();
+
+      if (val.length > 0) {
+        if (state.currentDraftWords.length < 10) {
+          state.currentDraftWords.push({
+            text: val,
+            bg: getRandomPastelBg()
+          });
+          input.value = '';
+          checkInputStatus();
+          renderStairs();
+        } else {
+          alert('하루에 최대 10개의 단어까지만 작성할 수 있습니다!');
+        }
+      }
+      focusInput();
+    }
+
+    function touchCompleteDay() {
+      if (state.activeYearMonth !== state.currentYearMonth) return;
+      const input = document.getElementById('wordInput');
+      const val = input.value.trim();
+
+      if (val.length > 0 && state.currentDraftWords.length < 10) {
+        state.currentDraftWords.push({
+          text: val,
+          bg: getRandomPastelBg()
+        });
+        input.value = '';
+      }
+
+      if (state.currentDraftWords.length > 0) {
+        const curData = state.monthData[state.currentYearMonth];
+        
+        curData.completedDays.push({
+          day: curData.currentDay,
+          words: [...state.currentDraftWords]
+        });
+
+        const newDaysCount = curData.completedDays.length;
+        if (newDaysCount > 0 && newDaysCount % 7 === 0) {
+          triggerConfetti();
+        }
+
+        state.currentDraftWords = [];
+        advanceToNextDay();
+        
+        saveState();
+        checkInputStatus();
+        renderStairs();
+        focusInput();
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (state.activeYearMonth !== state.currentYearMonth) return;
+
+      const input = document.getElementById('wordInput');
+      const val = input.value.trim();
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        touchAddWord();
+      } 
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (val.length > 0) {
+          touchAddWord();
+        } else {
+          touchCompleteDay();
+        }
+      }
+      else if (e.key === 'Backspace' && input.value === '' && state.currentDraftWords.length > 0) {
+        state.currentDraftWords.pop();
+        checkInputStatus();
+        renderStairs();
+      }
+    }
+
+    function handleInput(e) {
+      renderStairs();
+    }
+
+    function initSwipeGesture() {
+      const canvasArea = document.getElementById('canvasArea');
+      let touchStartX = 0;
+      let touchEndX = 0;
+
+      canvasArea.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+      }, { passive: true });
+
+      canvasArea.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+      }, { passive: true });
+
+      function handleSwipe() {
+        const threshold = 60;
+        const currentIndex = state.months.indexOf(state.activeYearMonth);
+        
+        if (touchEndX < touchStartX - threshold) {
+          if (currentIndex < state.months.length - 1) {
+            selectMonth(state.months[currentIndex + 1]);
+          }
+        }
+        if (touchEndX > touchStartX + threshold) {
+          if (currentIndex > 0) {
+            selectMonth(state.months[currentIndex - 1]);
+          }
+        }
+      }
+    }
+
+    function renderStairs() {
+      const container = document.getElementById('stairsContainer');
+      const wrapper = document.getElementById('stairsWrapper');
+      const canvasArea = document.getElementById('canvasArea');
+      container.innerHTML = '';
+
+      const viewMonthData = state.monthData[state.activeYearMonth];
+      if (!viewMonthData) return;
+
+      const allDaysToRender = [...viewMonthData.completedDays];
+      const isCurrentViewingMonth = (state.activeYearMonth === state.currentYearMonth);
+
+      if (isCurrentViewingMonth) {
+        const liveVal = document.getElementById('wordInput') ? document.getElementById('wordInput').value.trim() : '';
+        const liveWords = [...state.currentDraftWords];
+        if (liveVal) {
+          liveWords.push({
+            text: liveVal + '│',
+            bg: '#f3f4f6',
+            isLiveType: true
+          });
+        }
+
+        allDaysToRender.push({
+          day: viewMonthData.currentDay,
+          words: liveWords,
+          isDraft: true
+        });
+      }
+
+      if (allDaysToRender.length === 0) {
+        wrapper.style.height = '100%';
+        wrapper.style.width = '100%';
+        return;
+      }
+
+      let cumulativeX = 0;
+      let lastRowTopY = 0;
+      let totalWidthRequired = 0;
+
+      const daysCountInThisMonth = viewMonthData.completedDays.length;
+      const characterLevel = Math.min(4, Math.floor(daysCountInThisMonth / 7) + 1);
+
+      let characterTargetRowElement = null;
+
+      allDaysToRender.forEach((dayData, index) => {
+        const dayRow = document.createElement('div');
+        dayRow.className = 'absolute flex items-center transition-all duration-200';
+        
+        const currentYBottom = index * 34;
+        dayRow.style.bottom = `${currentYBottom}px`;
+        dayRow.style.left = `${cumulativeX}px`;
+
+        let firstBoxWidth = 0;
+
+        dayData.words.forEach((wordObj, wIdx) => {
+          const box = document.createElement('div');
+          box.className = 'word-box';
+
+          const textStr = typeof wordObj === 'string' ? wordObj : wordObj.text;
+          const bgStr = typeof wordObj === 'object' ? wordObj.bg : '#e5e7eb';
+
+          box.style.backgroundColor = bgStr;
+
+          if (dayData.isDraft && !wordObj.isLiveType) {
+            box.classList.add('deletable');
+            box.title = '터치하여 단어 삭제';
+            box.onclick = (e) => {
+              e.stopPropagation();
+              state.currentDraftWords.splice(wIdx, 1);
+              checkInputStatus();
+              renderStairs();
+              focusInput();
+            };
+            box.ontouchend = (e) => {
+              e.stopPropagation();
+              state.currentDraftWords.splice(wIdx, 1);
+              checkInputStatus();
+              renderStairs();
+              focusInput();
+            };
+          }
+
+          if (wIdx === 0) {
+            box.innerHTML = `<span class="day-num">${dayData.day}</span>${textStr}`;
+          } else {
+            box.innerText = textStr;
+          }
+
+          dayRow.appendChild(box);
+        });
+
+        container.appendChild(dayRow);
+
+        const rowChildren = dayRow.children;
+        if (rowChildren.length > 0) {
+          firstBoxWidth = rowChildren[0].offsetWidth || 45;
+        } else {
+          firstBoxWidth = 40;
+        }
+
+        if (rowChildren.length > 0) {
+          characterTargetRowElement = dayRow;
+          lastRowTopY = currentYBottom;
+        }
+
+        cumulativeX += firstBoxWidth;
+        totalWidthRequired = cumulativeX + 200;
+      });
+
+      if (characterTargetRowElement && characterTargetRowElement.firstElementChild) {
+        const charHtml = getCharacterSVG(characterLevel);
+        characterTargetRowElement.firstElementChild.insertAdjacentHTML('beforeend', charHtml);
+      }
+
+      const requiredHeight = lastRowTopY + 250;
+      wrapper.style.height = `${Math.max(canvasArea.clientHeight, requiredHeight)}px`;
+      wrapper.style.width = `${Math.max(canvasArea.clientWidth, totalWidthRequired)}px`;
+      container.style.bottom = '30px';
+
+      setTimeout(() => {
+        const targetScrollTop = wrapper.scrollHeight - canvasArea.clientHeight - lastRowTopY + 100;
+        canvasArea.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          left: Math.max(0, cumulativeX - canvasArea.clientWidth / 2),
+          behavior: 'smooth'
+        });
+      }, 50);
+    }
+
+    const sampleWordSets = [
+      ['패션쇼', '시트지', '민채', '망고'],
+      ['샌드위치', '커피', '산책'],
+      ['노트북', '코딩', '버그', '성공'],
+      ['운동', '헬스', '오운완'],
+      ['독서', '디자인', '스터디']
+    ];
+
+    function autoFillDay() {
+      if (state.activeYearMonth !== state.currentYearMonth) {
+        state.activeYearMonth = state.currentYearMonth;
+      }
+
+      const curData = state.monthData[state.currentYearMonth];
+      const wordsArr = sampleWordSets[(curData.completedDays.length) % sampleWordSets.length];
+      
+      const colorWords = wordsArr.map(w => ({
+        text: w,
+        bg: getRandomPastelBg()
+      }));
+
+      curData.completedDays.push({
+        day: curData.currentDay,
+        words: colorWords
+      });
+
+      const newDaysCount = curData.completedDays.length;
+      if (newDaysCount > 0 && newDaysCount % 7 === 0) {
+        triggerConfetti();
+      }
+
+      advanceToNextDay();
+      saveState();
+      checkInputStatus();
+      renderStairs();
+      focusInput();
+    }
+
+    function resetData() {
+      if (confirm('모든 월별 기록을 초기화하시겠습니까?')) {
+        localStorage.removeItem(STORAGE_KEY);
+        state = {
+          activeYearMonth: realYM,
+          currentYearMonth: realYM,
+          months: [realYM],
+          monthData: {
+            [realYM]: {
+              year: realYear,
+              month: realMonth,
+              currentDay: realDay,
+              completedDays: []
+            }
+          },
+          currentDraftWords: []
+        };
+        init();
+      }
+    }
+
+    window.addEventListener('resize', renderStairs);
+    window.onload = init;
+  </script>
+</body>
 </html>
