@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>한 단어 일기 계단 RPG - 모바일 최적화</title>
+  <title>한 단어 일기 계단 RPG</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 콘페티 라이브러리 -->
@@ -135,20 +135,6 @@
 </head>
 <body class="flex flex-col w-screen h-screen overflow-hidden bg-white" onclick="focusInput()">
 
-  <!-- 우측 상단: 검수 및 테스트 도구 (모바일에서는 간소화) -->
-  <div class="absolute top-2 right-2 z-20 flex items-center gap-1 bg-white/90 p-1 rounded" onclick="event.stopPropagation()">
-    <span id="currentDateDisplay" class="text-[10px] font-normal bg-black text-white px-1.5 py-0.5">로딩 중</span>
-    <button onclick="autoFillDay()" class="text-[10px] border border-black px-1.5 py-0.5 bg-gray-100 active:bg-black active:text-white">
-      ⚡채우기
-    </button>
-    <button onclick="addNewMonth()" class="text-[10px] border border-black px-1.5 py-0.5 bg-white active:bg-black active:text-white">
-      +월
-    </button>
-    <button onclick="resetData()" class="text-[10px] border border-black px-1.5 py-0.5 bg-white text-red-600 active:bg-red-600 active:text-white">
-      초기화
-    </button>
-  </div>
-
   <!-- 상단 영역 (왼쪽 월 목록 + 오른쪽 계단 무대) -->
   <div class="flex flex-1 overflow-hidden">
     
@@ -166,7 +152,7 @@
 
   </div>
 
-  <!-- 하단 영역 (모바일 화면 잘림 방지 최적화) -->
+  <!-- 하단 영역 -->
   <div class="h-16 sm:h-20 border-top-black flex shrink-0 bg-white" onclick="event.stopPropagation()">
     
     <!-- 왼쪽 하단 타이틀 박스 -->
@@ -174,7 +160,7 @@
       one word<br>a day<br>game
     </div>
 
-    <!-- 오른쪽 하단 영역: 입력란과 버튼이 화면 안에 완전히 들어오도록 컴팩트하게 구성 -->
+    <!-- 오른쪽 하단 영역: 입력란과 버튼 -->
     <div class="flex-1 flex items-center justify-between px-2 sm:px-4 gap-2 bg-white overflow-hidden">
       <div id="todayStatusText" class="text-[11px] sm:text-xs font-normal text-gray-500 whitespace-nowrap shrink-0">확인 중</div>
       
@@ -203,7 +189,7 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'ONE_WORD_STAIR_TOUCH_V2';
+    const STORAGE_KEY = 'ONE_WORD_STAIR_FINAL_V1';
 
     function getRandomPastelBg() {
       const hue = Math.floor(Math.random() * 360);
@@ -218,14 +204,12 @@
 
     let state = {
       activeYearMonth: realYM,
-      currentYearMonth: realYM,
       months: [realYM],
       monthData: {
         [realYM]: {
           year: realYear,
           month: realMonth,
-          currentDay: realDay,
-          completedDays: [] 
+          completedDays: {} // 날짜별로 저장 (예: { "26": [{text, bg}, ...] })
         }
       },
       currentDraftWords: []
@@ -339,37 +323,39 @@
       if (saved) {
         try { 
           state = JSON.parse(saved); 
-          if (state.monthData[realYM]) {
-            if (state.monthData[realYM].currentDay < realDay) {
-              state.monthData[realYM].currentDay = realDay;
-            }
-          } else {
+          if (!state.monthData[realYM]) {
             if (!state.months.includes(realYM)) {
               state.months.push(realYM);
             }
             state.monthData[realYM] = {
               year: realYear,
               month: realMonth,
-              currentDay: realDay,
-              completedDays: []
+              completedDays: {}
             };
           }
-          state.currentYearMonth = realYM;
           state.activeYearMonth = realYM;
         } catch (e) { 
           console.error(e); 
         }
       } else {
         state.activeYearMonth = realYM;
-        state.currentYearMonth = realYM;
         state.months = [realYM];
-        state.monthData = {};
-        state.monthData[realYM] = {
-          year: realYear,
-          month: realMonth,
-          currentDay: realDay,
-          completedDays: []
+        state.monthData = {
+          [realYM]: {
+            year: realYear,
+            month: realMonth,
+            completedDays: {}
+          }
         };
+        state.currentDraftWords = [];
+      }
+
+      // 오늘 날짜의 임시 작성 단어 불러오기
+      const curMonthData = state.monthData[realYM];
+      if (curMonthData && curMonthData.completedDays[realDay]) {
+        state.currentDraftWords = [...curMonthData.completedDays[realDay]];
+      } else {
+        state.currentDraftWords = [];
       }
 
       renderMonthList();
@@ -397,9 +383,6 @@
         };
         container.appendChild(btn);
       });
-
-      const activeData = state.monthData[state.activeYearMonth];
-      document.getElementById('currentDateDisplay').innerText = `${state.activeYearMonth} (${activeData ? activeData.currentDay + '일' : ''})`;
     }
 
     function selectMonth(ym) {
@@ -412,7 +395,7 @@
 
     function focusInput() {
       const input = document.getElementById('wordInput');
-      if (input && state.activeYearMonth === state.currentYearMonth) {
+      if (input && state.activeYearMonth === realYM) {
         input.focus();
       }
     }
@@ -420,10 +403,9 @@
     function checkInputStatus() {
       const input = document.getElementById('wordInput');
       const statusText = document.getElementById('todayStatusText');
-      const isCurrentMonth = (state.activeYearMonth === state.currentYearMonth);
-      const curMonthData = state.monthData[state.currentYearMonth];
+      const isCurrentDayView = (state.activeYearMonth === realYM);
 
-      if (!isCurrentMonth) {
+      if (!isCurrentDayView) {
         input.disabled = true;
         input.placeholder = "조회 모드";
         statusText.innerText = `기록 감상 중`;
@@ -435,56 +417,13 @@
         } else {
           input.placeholder = "단어 입력...";
         }
-        statusText.innerText = `${curMonthData.month}/${curMonthData.currentDay} (${state.currentDraftWords.length}/10)`;
+        statusText.innerText = `${realMonth}/${realDay} (${state.currentDraftWords.length}/10)`;
         statusText.className = "text-[11px] sm:text-xs font-normal text-gray-500 whitespace-nowrap shrink-0";
       }
     }
 
-    function advanceToNextDay() {
-      const curData = state.monthData[state.currentYearMonth];
-      curData.currentDay++;
-      if (curData.currentDay > 31) {
-        addNewMonth();
-      } else {
-        renderMonthList();
-      }
-    }
-
-    function addNewMonth() {
-      const curData = state.monthData[state.currentYearMonth];
-      let newYear = curData.year;
-      let newMonth = curData.month + 1;
-      
-      if (newMonth > 12) {
-        newMonth = 1;
-        newYear++;
-      }
-
-      const newYM = `${newYear}-${String(newMonth).padStart(2, '0')}`;
-
-      if (!state.months.includes(newYM)) {
-        state.months.push(newYM);
-        state.monthData[newYM] = {
-          year: newYear,
-          month: newMonth,
-          currentDay: 1,
-          completedDays: []
-        };
-      }
-
-      state.currentYearMonth = newYM;
-      state.activeYearMonth = newYM;
-      state.currentDraftWords = [];
-
-      saveState();
-      renderMonthList();
-      renderStairs();
-      checkInputStatus();
-      focusInput();
-    }
-
     function touchAddWord() {
-      if (state.activeYearMonth !== state.currentYearMonth) return;
+      if (state.activeYearMonth !== realYM) return;
       const input = document.getElementById('wordInput');
       const val = input.value.trim();
 
@@ -495,6 +434,17 @@
             bg: getRandomPastelBg()
           });
           input.value = '';
+          
+          // 실시간으로 오늘 날짜 데이터에 반영 및 저장
+          const curData = state.monthData[realYM];
+          curData.completedDays[realDay] = [...state.currentDraftWords];
+          
+          const totalDaysCount = Object.keys(curData.completedDays).length;
+          if (totalDaysCount > 0 && totalDaysCount % 7 === 0 && state.currentDraftWords.length === 1) {
+            triggerConfetti();
+          }
+
+          saveState();
           checkInputStatus();
           renderStairs();
         } else {
@@ -505,7 +455,7 @@
     }
 
     function touchCompleteDay() {
-      if (state.activeYearMonth !== state.currentYearMonth) return;
+      if (state.activeYearMonth !== realYM) return;
       const input = document.getElementById('wordInput');
       const val = input.value.trim();
 
@@ -518,21 +468,8 @@
       }
 
       if (state.currentDraftWords.length > 0) {
-        const curData = state.monthData[state.currentYearMonth];
-        
-        curData.completedDays.push({
-          day: curData.currentDay,
-          words: [...state.currentDraftWords]
-        });
-
-        const newDaysCount = curData.completedDays.length;
-        if (newDaysCount > 0 && newDaysCount % 7 === 0) {
-          triggerConfetti();
-        }
-
-        state.currentDraftWords = [];
-        advanceToNextDay();
-        
+        const curData = state.monthData[realYM];
+        curData.completedDays[realDay] = [...state.currentDraftWords];
         saveState();
         checkInputStatus();
         renderStairs();
@@ -541,7 +478,7 @@
     }
 
     function handleKeyDown(e) {
-      if (state.activeYearMonth !== state.currentYearMonth) return;
+      if (state.activeYearMonth !== realYM) return;
 
       const input = document.getElementById('wordInput');
       const val = input.value.trim();
@@ -552,14 +489,17 @@
       } 
       else if (e.key === 'Enter') {
         e.preventDefault();
-        if (val.length > 0) {
-          touchAddWord();
-        } else {
-          touchCompleteDay();
-        }
+        touchAddWord();
       }
       else if (e.key === 'Backspace' && input.value === '' && state.currentDraftWords.length > 0) {
         state.currentDraftWords.pop();
+        const curData = state.monthData[realYM];
+        if (state.currentDraftWords.length === 0) {
+          delete curData.completedDays[realDay];
+        } else {
+          curData.completedDays[realDay] = [...state.currentDraftWords];
+        }
+        saveState();
         checkInputStatus();
         renderStairs();
       }
@@ -609,10 +549,14 @@
       const viewMonthData = state.monthData[state.activeYearMonth];
       if (!viewMonthData) return;
 
-      const allDaysToRender = [...viewMonthData.completedDays];
-      const isCurrentViewingMonth = (state.activeYearMonth === state.currentYearMonth);
+      // 날짜별 객체를 정렬된 배열로 변환 [{day: '1', words: [...]}, ...]
+      const sortedDays = Object.keys(viewMonthData.completedDays)
+        .map(d => ({ day: parseInt(d), words: viewMonthData.completedDays[d] }))
+        .sort((a, b) => a.day - b.day);
 
-      if (isCurrentViewingMonth) {
+      const isCurrentDayView = (state.activeYearMonth === realYM);
+
+      if (isCurrentDayView) {
         const liveVal = document.getElementById('wordInput') ? document.getElementById('wordInput').value.trim() : '';
         const liveWords = [...state.currentDraftWords];
         if (liveVal) {
@@ -623,14 +567,21 @@
           });
         }
 
-        allDaysToRender.push({
-          day: viewMonthData.currentDay,
-          words: liveWords,
-          isDraft: true
-        });
+        // 이미 오늘 날짜가 기록에 있다면 라이브 입력 반영, 없으면 임시 추가
+        const existingIdx = sortedDays.findIndex(d => d.day === realDay);
+        if (existingIdx >= 0) {
+          sortedDays[existingIdx].words = liveWords;
+          sortedDays[existingIdx].isDraft = true;
+        } else if (liveWords.length > 0) {
+          sortedDays.push({
+            day: realDay,
+            words: liveWords,
+            isDraft: true
+          });
+        }
       }
 
-      if (allDaysToRender.length === 0) {
+      if (sortedDays.length === 0) {
         wrapper.style.height = '100%';
         wrapper.style.width = '100%';
         return;
@@ -640,12 +591,12 @@
       let lastRowTopY = 0;
       let totalWidthRequired = 0;
 
-      const daysCountInThisMonth = viewMonthData.completedDays.length;
-      const characterLevel = Math.min(4, Math.floor(daysCountInThisMonth / 7) + 1);
+      const totalDaysCount = Object.keys(viewMonthData.completedDays).length;
+      const characterLevel = Math.min(4, Math.floor(totalDaysCount / 7) + 1);
 
       let characterTargetRowElement = null;
 
-      allDaysToRender.forEach((dayData, index) => {
+      sortedDays.forEach((dayData, index) => {
         const dayRow = document.createElement('div');
         dayRow.className = 'absolute flex items-center transition-all duration-200';
         
@@ -664,12 +615,20 @@
 
           box.style.backgroundColor = bgStr;
 
-          if (dayData.isDraft && !wordObj.isLiveType) {
+          // 오늘 작성 중인 당일의 단어만 클릭/터치 시 삭제 가능
+          if (isCurrentDayView && dayData.day === realDay && !wordObj.isLiveType) {
             box.classList.add('deletable');
             box.title = '터치하여 단어 삭제';
             box.onclick = (e) => {
               e.stopPropagation();
               state.currentDraftWords.splice(wIdx, 1);
+              const curData = state.monthData[realYM];
+              if (state.currentDraftWords.length === 0) {
+                delete curData.completedDays[realDay];
+              } else {
+                curData.completedDays[realDay] = [...state.currentDraftWords];
+              }
+              saveState();
               checkInputStatus();
               renderStairs();
               focusInput();
@@ -677,6 +636,13 @@
             box.ontouchend = (e) => {
               e.stopPropagation();
               state.currentDraftWords.splice(wIdx, 1);
+              const curData = state.monthData[realYM];
+              if (state.currentDraftWords.length === 0) {
+                delete curData.completedDays[realDay];
+              } else {
+                curData.completedDays[realDay] = [...state.currentDraftWords];
+              }
+              saveState();
               checkInputStatus();
               renderStairs();
               focusInput();
@@ -728,65 +694,6 @@
           behavior: 'smooth'
         });
       }, 50);
-    }
-
-    const sampleWordSets = [
-      ['패션쇼', '시트지', '민채', '망고'],
-      ['샌드위치', '커피', '산책'],
-      ['노트북', '코딩', '버그', '성공'],
-      ['운동', '헬스', '오운완'],
-      ['독서', '디자인', '스터디']
-    ];
-
-    function autoFillDay() {
-      if (state.activeYearMonth !== state.currentYearMonth) {
-        state.activeYearMonth = state.currentYearMonth;
-      }
-
-      const curData = state.monthData[state.currentYearMonth];
-      const wordsArr = sampleWordSets[(curData.completedDays.length) % sampleWordSets.length];
-      
-      const colorWords = wordsArr.map(w => ({
-        text: w,
-        bg: getRandomPastelBg()
-      }));
-
-      curData.completedDays.push({
-        day: curData.currentDay,
-        words: colorWords
-      });
-
-      const newDaysCount = curData.completedDays.length;
-      if (newDaysCount > 0 && newDaysCount % 7 === 0) {
-        triggerConfetti();
-      }
-
-      advanceToNextDay();
-      saveState();
-      checkInputStatus();
-      renderStairs();
-      focusInput();
-    }
-
-    function resetData() {
-      if (confirm('모든 월별 기록을 초기화하시겠습니까?')) {
-        localStorage.removeItem(STORAGE_KEY);
-        state = {
-          activeYearMonth: realYM,
-          currentYearMonth: realYM,
-          months: [realYM],
-          monthData: {
-            [realYM]: {
-              year: realYear,
-              month: realMonth,
-              currentDay: realDay,
-              completedDays: []
-            }
-          },
-          currentDraftWords: []
-        };
-        init();
-      }
     }
 
     window.addEventListener('resize', renderStairs);
