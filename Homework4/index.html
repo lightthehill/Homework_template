@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
     <title>Homework3</title>
     <script src="https://cdn.jsdelivr.net/npm/p5@2/lib/p5.min.js"></script>
+    <script src="sketch.js"></script>
     <style>
       html, body {
         height: 100%;
@@ -24,6 +25,22 @@
       canvas {
         touch-action: none;
       }
+
+      /* 화면 정중앙에 링크를 배치하기 위한 스타일 */
+      .center-link {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10; /* p5.js 캔버스보다 위에 오도록 설정 */
+        font-family: 'Noto Sans KR', sans-serif;
+        font-size: 16px;
+        color: #000000;
+        background-color: rgba(255, 255, 255, 0.8);
+        padding: 10px 15px;
+        border-radius: 4px;
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
@@ -31,7 +48,8 @@
       // 터치 필수: Safari는 CSS만으로는 드래그 스크롤을 완전히 못 막아서 스크립트로 한 번 더 차단
       document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
     </script>
-    <a href="https://lightthehill.github.io/onewordadaygame/"></a>
-    <script src="sketch.js"></script>
+    <!-- 화면 정중앙에 오도록 클래스를 추가하고 <a> 태그 사이에 주소 텍스트를 넣었습니다 -->
+    <a class="center-link" href="https://lightthehill.github.io/onewordadaygame/"> one word a day game </a>
+
   </body>
 </html>
